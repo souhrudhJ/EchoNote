@@ -1,0 +1,21 @@
+# Backend API
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Video/Audio processing
+ffmpeg-python>=0.2.0
+
+# Transcription
+faster-whisper>=1.0.0
+
+# Embeddings and NLP
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# LLM client
+google-generativeai>=0.3.0
+
+# Utilities
+python-slugify>=8.0.0
+tqdm>=4.65.0
