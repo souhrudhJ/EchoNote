@@ -28,7 +28,7 @@ AI-powered lecture transcription and summarization tool. Upload lecture videos, 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/EchoNote.git
+git clone https://github.com/souhrudhJ/EchoNote.git
 cd EchoNote
 
 # 2. Install Python dependencies
