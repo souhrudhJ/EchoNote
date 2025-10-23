@@ -4,7 +4,11 @@ AI-powered lecture transcription and summarization tool. Upload lecture videos, 
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-green.svg)
-![React](https://img.shields.io/badge/react-18.2+-blue.svg)
+![React](https://img.shields.io/badge/react-18.3+-blue.svg)
+![TypeScript](https://img.shields.io/badge/typescript-5.8+-blue.svg)
+![Vite](https://img.shields.io/badge/vite-5.4+-purple.svg)
+
+> **🎨 NEW**: Beautiful modern UI with Vite + TypeScript + Tailwind CSS + shadcn/ui! Features dark mode, real-time updates, and smooth animations.
 
 ## ✨ Features
 
@@ -12,8 +16,10 @@ AI-powered lecture transcription and summarization tool. Upload lecture videos, 
 - **📚 Smart Segmentation**: AI detects topic boundaries using semantic embeddings
 - **🤖 AI Summaries**: Google Gemini generates titles, summaries, and key points for each chapter
 - **⭐ Importance Scoring**: Each chapter rated 0.0-1.0 for study prioritization
-- **📹 Modern Web UI**: React frontend with video playback and chapter navigation
+- **🎨 Beautiful Modern UI**: Vite + TypeScript + Tailwind CSS with 49 shadcn/ui components
+- **📹 Video Playback**: Integrated player with chapter navigation and timestamp seeking
 - **💾 Local-First**: All data stored locally in `./data/` directory
+- **📦 Export Options**: Download SRT subtitles and JSON chapter data
 
 ## 🚀 Quick Start
 
@@ -48,18 +54,44 @@ export GEMINI_API_KEY="your-api-key-here"
 
 ### Running the App
 
-**Terminal 1 - Backend:**
+**Development Mode (Recommended):**
+
+Windows:
+```bash
+start_dev.bat
+```
+
+Linux/Mac:
+```bash
+chmod +x start_dev.sh
+./start_dev.sh
+```
+
+This starts both backend (port 5000) and frontend (port 8080).
+Open http://localhost:8080 in your browser.
+
+**Manual Start:**
+
+Terminal 1 - Backend:
 ```bash
 python server.py
 ```
-Server starts at http://localhost:5000
 
-**Terminal 2 - Frontend:**
+Terminal 2 - Frontend:
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
-App opens at http://localhost:3000
+
+**Production Mode:**
+
+```bash
+cd frontend
+npm run build
+cd ..
+python server.py
+```
+App available at http://localhost:5000 (serves both frontend and API)
 
 ## 📖 Usage
 
@@ -235,12 +267,12 @@ export GEMINI_API_KEY="your-key" && python server.py
 
 ### Frontend Can't Connect
 
-**Issue**: Backend not running
+**Issue**: Backend not running or proxy misconfigured
 
-Make sure Flask server is running on port 5000. Check `frontend/package.json` has:
-```json
-"proxy": "http://localhost:5000"
-```
+Make sure:
+1. Flask server is running on port 5000
+2. Frontend dev server is on port 8080
+3. Check `frontend/vite.config.ts` has proxy configuration
 
 ## 📝 License
 

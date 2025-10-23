@@ -1,105 +1,190 @@
-# Lecture Notes Generator - React Frontend
+# EchoNote Frontend
 
-Modern React frontend for the Lecture Notes Generator application.
+Modern, beautiful React frontend for EchoNote built with Vite, TypeScript, and Tailwind CSS.
 
-## Features
+## 🎨 Features
 
-- 📤 Video upload with progress tracking
-- 📋 Lecture list and management
-- ▶️ Integrated video player
-- 📚 Interactive chapter viewer with importance highlighting
-- 📥 Download chapters and subtitles
-- 📊 Real-time processing status updates
+- **Modern UI/UX**: Clean, professional interface with smooth animations
+- **Dark Mode**: Toggle between light and dark themes
+- **Responsive Design**: Works perfectly on desktop, tablet, and mobile
+- **Real-time Updates**: Live progress tracking for uploads and processing
+- **Toast Notifications**: Beautiful, non-intrusive notifications
+- **Search & Filter**: Easily find and filter chapters by importance
+- **Skeleton Loading**: Smooth loading states for better UX
 
-## Development
+## 🛠️ Tech Stack
 
-### Install Dependencies
+- **React 18** - Modern React with hooks
+- **TypeScript** - Type-safe development
+- **Vite** - Lightning-fast build tool
+- **Tailwind CSS** - Utility-first styling
+- **shadcn/ui** - Beautiful, accessible components
+- **Radix UI** - Headless UI primitives
+- **Lucide Icons** - Beautiful icon set
+- **Axios** - HTTP client
+- **Sonner** - Toast notifications
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- Backend server running on `http://localhost:5000`
+
+### Installation
+
 ```bash
+cd frontend
 npm install
 ```
 
-### Start Development Server
-```bash
-npm start
-```
-Opens at http://localhost:3000
+### Development
 
-### Build for Production
+```bash
+npm run dev
+```
+
+Frontend will be available at `http://localhost:8080`
+
+### Production Build
+
 ```bash
 npm run build
-```
-Creates optimized build in `/build` directory
-
-## Configuration
-
-The app proxies API requests to the Flask backend. To change the backend URL, edit `package.json`:
-
-```json
-"proxy": "http://localhost:5000"
+npm run preview
 ```
 
-For production deployment, set the backend URL in your environment or update API calls in `src/App.js` to use absolute URLs.
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 frontend/
-├── public/
-│   └── index.html          # HTML template
 ├── src/
-│   ├── App.js              # Main application component
-│   ├── App.css             # Application styles
-│   ├── index.js            # React entry point
-│   └── index.css           # Global styles
-├── package.json            # Dependencies and scripts
-└── README.md               # This file
+│   ├── components/
+│   │   ├── ui/              # shadcn/ui components
+│   │   ├── ChapterCard.tsx  # Chapter display card
+│   │   ├── LectureCard.tsx  # Lecture sidebar card
+│   │   ├── UploadZone.tsx   # File upload component
+│   │   ├── VideoPlayer.tsx  # Video player component
+│   │   ├── EmptyState.tsx   # Empty state screens
+│   │   └── LoadingSkeleton.tsx  # Loading states
+│   ├── lib/
+│   │   ├── api.ts           # API client functions
+│   │   └── utils.ts         # Utility functions
+│   ├── hooks/               # Custom React hooks
+│   ├── assets/              # Images and static files
+│   ├── App.tsx              # Main application component
+│   ├── index.css            # Global styles & Tailwind
+│   └── index.jsx            # Application entry point
+├── public/                  # Static assets
+├── index.html               # HTML template
+├── vite.config.ts           # Vite configuration
+├── tailwind.config.ts       # Tailwind configuration
+├── tsconfig.json            # TypeScript configuration
+└── package.json             # Dependencies
 ```
 
-## API Integration
+## 🎨 Design System
 
-The frontend communicates with the Flask backend API:
+### Colors
 
+- **Primary**: Purple gradient (`#6366f1` → `#8b5cf6`)
+- **Success**: Emerald (`#10b981`)
+- **Warning**: Amber (`#f59e0b`)
+- **Info**: Blue (`#3b82f6`)
+- **Destructive**: Red (`#ef4444`)
+
+### Typography
+
+- **Font**: Inter (Google Fonts)
+- **Headings**: Bold, large sizes
+- **Body**: Regular, 16px minimum
+
+### Components
+
+All components follow the shadcn/ui design system with custom styling via Tailwind CSS.
+
+## 🔌 API Integration
+
+The frontend communicates with the backend via REST API:
+
+- `GET /api/lectures` - List all lectures
+- `GET /api/lectures/:id` - Get lecture details
+- `GET /api/lectures/:id/chapters` - Get chapters
 - `POST /api/upload` - Upload video
 - `POST /api/transcribe` - Start transcription
 - `POST /api/summarize` - Start summarization
-- `GET /api/lectures` - List lectures
-- `GET /api/lectures/<id>/chapters` - Get chapters
-- `GET /api/status/<task_id>` - Poll task status
+- `GET /api/status/:taskId` - Get task status
+- `GET /api/videos/:id` - Stream video
 
-## Styling
+Proxy configuration in `vite.config.ts` forwards `/api` requests to `http://localhost:5000`.
 
-The app uses vanilla CSS with a modern gradient theme. Key colors:
-- Primary: `#667eea` to `#764ba2` (gradient)
-- Success: `#10b981`
-- Warning: `#f59e0b`
-- Error: `#ef4444`
+## 🌙 Dark Mode
 
-## Browser Support
+Dark mode is implemented using Tailwind's dark mode with class strategy. Toggle is available in the header. Preference is saved to localStorage.
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
+## 📱 Responsive Breakpoints
 
-## Deployment
+- Mobile: `< 768px`
+- Tablet: `768px - 1024px`
+- Desktop: `> 1024px`
 
-### Build Production Bundle
-```bash
-npm run build
-```
+## 🎯 Key Features
 
-### Serve with Static Server
-```bash
-npx serve -s build
-```
+### Upload Zone
+- Drag & drop support
+- Real-time upload progress
+- File validation
+- Beautiful animations
 
-### Deploy to Netlify/Vercel
-1. Connect your Git repository
-2. Set build command: `npm run build`
-3. Set publish directory: `build`
-4. Add environment variable for backend URL if needed
+### Lecture Management
+- Sidebar with all lectures
+- Status badges (uploaded, transcribed, complete)
+- Active state highlighting
+- Smooth transitions
 
-## License
+### Chapter Display
+- Color-coded by importance
+- Search functionality
+- Importance filtering
+- Expandable key points
+- Timestamp display
 
-MIT License - Part of the Lecture Notes Generator project
+### Video Player
+- Native HTML5 controls
+- Responsive aspect ratio
+- Smooth loading states
 
+## 🔧 Configuration
+
+### Environment Variables
+
+No frontend-specific environment variables needed. API proxy is configured in `vite.config.ts`.
+
+### Customization
+
+To customize the theme, edit:
+- `tailwind.config.ts` - Tailwind theme
+- `src/index.css` - CSS variables and custom styles
+
+## 📦 Build Output
+
+Production build creates optimized assets in `dist/` directory:
+
+- Minified JavaScript
+- Optimized CSS
+- Compressed assets
+- Code splitting
+
+## 🤝 Contributing
+
+When adding new components:
+
+1. Use TypeScript for type safety
+2. Follow shadcn/ui patterns
+3. Use Tailwind for styling
+4. Add proper accessibility attributes
+5. Include loading states
+6. Handle error cases
+
+## 📄 License
+
+Same as parent project (MIT)

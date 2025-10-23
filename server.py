@@ -28,7 +28,7 @@ from flask_cors import CORS
 from slugify import slugify
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
 CORS(app)  # Enable CORS for React frontend
 
 # Configuration
@@ -396,6 +396,32 @@ def download_file(lecture_id, file_type):
         return jsonify({"error": "File not found"}), 404
     
     return send_file(file_path, as_attachment=True)
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    """Serve the frontend application."""
+    frontend_dist = Path('frontend/dist')
+    
+    # If frontend build doesn't exist, show helpful message
+    if not frontend_dist.exists():
+        return jsonify({
+            "message": "Frontend not built yet. Run 'cd frontend && npm run build' to build the frontend.",
+            "api_status": "running",
+            "api_docs": "/api/health"
+        }), 200
+    
+    # Serve static files
+    if path and (frontend_dist / path).exists():
+        return send_from_directory('frontend/dist', path)
+    
+    # Serve index.html for all other routes (SPA)
+    index_path = frontend_dist / 'index.html'
+    if index_path.exists():
+        return send_file(index_path)
+    
+    return jsonify({"error": "Frontend not found"}), 404
 
 
 if __name__ == '__main__':
