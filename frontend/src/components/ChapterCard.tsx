@@ -1,14 +1,23 @@
 import { Star, Clock, CheckCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface ChapterCardProps {
   title: string;
   startTime: string;
   endTime: string;
+  /** raw start time in seconds (optional) used for seeking */
+  startSeconds?: number;
+  /** raw end time in seconds (optional) used for download */
+  endSeconds?: number;
   importance: number;
   summary: string;
   keyPoints: string[];
+  /** called when user clicks the card to seek the player */
+  onSeek?: (seconds: number) => void;
+  /** called when user clicks download clip */
+  onDownload?: (start: number, end?: number, title?: string) => void;
 }
 
 const getImportanceConfig = (importance: number) => {
@@ -36,20 +45,47 @@ export const ChapterCard = ({
   title,
   startTime,
   endTime,
+  startSeconds,
+  endSeconds,
   importance,
   summary,
   keyPoints,
+  onSeek,
+  onDownload,
 }: ChapterCardProps) => {
   const config = getImportanceConfig(importance);
   const isImportant = importance > 0.8;
 
   return (
-    <Card className={`p-6 border-l-4 ${config.color} transition-all duration-500 hover:shadow-xl hover:-translate-y-1 bg-gradient-to-br from-white to-primary/5 dark:from-gray-800 dark:to-gray-900`}>
+    <Card
+      onClick={() => startSeconds != null && onSeek?.(startSeconds)}
+      tabIndex={startSeconds != null ? 0 : -1}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && startSeconds != null) {
+          onSeek?.(startSeconds);
+        }
+      }}
+      className={`p-6 border-l-4 ${config.color} transition-all duration-500 hover:shadow-xl hover:-translate-y-1 bg-gradient-to-br from-white to-primary/5 dark:from-gray-800 dark:to-gray-900 ${startSeconds != null ? 'cursor-pointer' : ''}`}>
       <div className="flex items-start justify-between mb-3">
         <h3 className="font-semibold text-lg flex items-center gap-2">
           {title}
           {isImportant && <Star className="w-5 h-5 text-warning fill-warning" />}
         </h3>
+        <div className="flex items-center gap-2">
+          {/* Download clip button */}
+          {startSeconds != null && (
+            <Button
+              size="sm"
+              className="gap-2 gradient-primary hover:opacity-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload?.(startSeconds, endSeconds, title);
+              }}
+            >
+              Download Clip
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-4 mb-4">

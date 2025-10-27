@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { GraduationCap, Download, Sparkles, Moon, Sun, Search } from 'lucide-react';
 import { UploadZone } from './components/UploadZone';
@@ -27,6 +27,65 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [importanceFilter, setImportanceFilter] = useState<'all' | 'high' | 'medium' | 'normal'>('all');
   const [loading, setLoading] = useState(false);
+  const [seekTo, setSeekTo] = useState<number | null>(null);
+  const videoSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSeek = (seconds: number) => {
+    setSeekTo(seconds);
+    // scroll the video section into view smoothly
+    try {
+      videoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+      // ignore if scrolling fails
+    }
+  };
+
+  const downloadClip = async (start: number, end?: number, filename?: string) => {
+    if (!selectedLecture) return;
+    const lectureId = (selectedLecture as any).lecture_id;
+
+    try {
+      // Build URL with query params and let the browser download the file directly.
+      // Include an optional filename query param so the server can set Content-Disposition.
+      const params = new URLSearchParams();
+      params.append('start', String(start));
+      if (end != null) params.append('end', String(end));
+      if (filename) params.append('filename', filename);
+
+      const downloadUrl = `/api/lectures/${lectureId}/download/clip?${params.toString()}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.target = '_blank';
+      // Use download attribute to suggest filename — server will provide Content-Disposition
+      const suggested = filename ? `${filename}.mp4` : `${lectureId}_clip_${Math.round(start)}.mp4`;
+      link.setAttribute('download', suggested);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error: any) {
+      console.error('Download clip error:', error);
+      // If axios was used previously the error response may be a Blob; attempt to extract JSON message
+      if (error?.response && error.response.data) {
+        try {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const text = String(reader.result || '');
+              const json = JSON.parse(text);
+              toast.error('Failed to download clip: ' + (json.error || text));
+            } catch (e) {
+              toast.error('Failed to download clip');
+            }
+          };
+          reader.readAsText(error.response.data);
+        } catch (e) {
+          toast.error('Failed to download clip: ' + (error.message || 'unknown'));
+        }
+      } else {
+        toast.error('Failed to download clip: ' + (error.message || 'unknown'));
+      }
+    }
+  };
 
   // Load lectures on mount
   useEffect(() => {
@@ -290,6 +349,7 @@ function App() {
                       key={lecture.lecture_id}
                       title={lecture.lecture_id}
                       status={getLectureStatus(lecture)}
+                      duration={lecture.duration}
                       isActive={selectedLecture?.lecture_id === lecture.lecture_id}
                       onClick={() => selectLecture(lecture.lecture_id)}
                     />
@@ -366,7 +426,13 @@ function App() {
 
                 {/* Video Player */}
                 {(selectedLecture as any).video_filename && (
-                  <VideoPlayer videoUrl={`/api/videos/${(selectedLecture as any).lecture_id}`} />
+                  <div ref={videoSectionRef}>
+                    <VideoPlayer
+                      videoUrl={`/api/videos/${(selectedLecture as any).lecture_id}`}
+                      seekTo={seekTo}
+                      onSeeked={() => setSeekTo(null)}
+                    />
+                  </div>
                 )}
 
                 {/* Chapters */}
@@ -414,9 +480,13 @@ function App() {
                             title={chapter.title}
                             startTime={formatTimestamp(chapter.start)}
                             endTime={formatTimestamp(chapter.end)}
+                            startSeconds={chapter.start}
+                            endSeconds={chapter.end}
                             importance={chapter.importance}
                             summary={chapter.summary}
                             keyPoints={chapter.key_points || []}
+                            onSeek={(seconds: number) => handleSeek(seconds)}
+                            onDownload={(s: number, e?: number) => downloadClip(s, e, chapter.title)}
                           />
                         ))
                       )}

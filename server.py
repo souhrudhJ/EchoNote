@@ -24,6 +24,8 @@ from typing import Dict, Optional
 from datetime import datetime
 
 from flask import Flask, request, jsonify, send_file, send_from_directory
+import uuid
+import shutil
 from flask_cors import CORS
 from slugify import slugify
 from werkzeug.utils import secure_filename
@@ -288,13 +290,53 @@ def list_lectures():
         if not lecture_dir.is_dir() or lecture_dir.name == 'uploads':
             continue
         
+        # detect video file and duration
+        video_files = list(lecture_dir.glob("*.mp4")) + list(lecture_dir.glob("*.avi")) + \
+                     list(lecture_dir.glob("*.mov")) + list(lecture_dir.glob("*.mkv")) + \
+                     list(lecture_dir.glob("*.webm"))
+
+        has_video = len(video_files) > 0
+        duration_seconds = None
+        duration_str = "0:00"
+        if has_video:
+            video_path = video_files[0]
+            # try to get duration using ffprobe (part of ffmpeg)
+            try:
+                cmd = [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(video_path),
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True)
+                if res.returncode == 0 and res.stdout:
+                    try:
+                        duration_seconds = float(res.stdout.strip())
+                        # format as H:MM:SS or M:SS
+                        h = int(duration_seconds // 3600)
+                        m = int((duration_seconds % 3600) // 60)
+                        s = int(duration_seconds % 60)
+                        if h > 0:
+                            duration_str = f"{h}:{m:02d}:{s:02d}"
+                        else:
+                            duration_str = f"{m}:{s:02d}"
+                    except Exception:
+                        duration_seconds = None
+                else:
+                    duration_seconds = None
+            except FileNotFoundError:
+                # ffprobe not found; leave duration as default
+                duration_seconds = None
+
         lecture_info = {
             "lecture_id": lecture_dir.name,
-            "has_video": len(list(lecture_dir.glob("*.mp4"))) + \
-                        len(list(lecture_dir.glob("*.avi"))) + \
-                        len(list(lecture_dir.glob("*.mov"))) + \
-                        len(list(lecture_dir.glob("*.mkv"))) + \
-                        len(list(lecture_dir.glob("*.webm"))) > 0,
+            "has_video": has_video,
+            "duration_seconds": duration_seconds,
+            "duration": duration_str,
             "has_segments": (lecture_dir / "segments.json").exists(),
             "has_chapters_raw": (lecture_dir / "chapters_raw.json").exists(),
             "has_chapters": (lecture_dir / "chapters.json").exists()
@@ -396,6 +438,111 @@ def download_file(lecture_id, file_type):
         return jsonify({"error": "File not found"}), 404
     
     return send_file(file_path, as_attachment=True)
+
+
+@app.route('/api/lectures/<lecture_id>/download/clip', methods=['GET'])
+def download_clip(lecture_id):
+    """Create and return a clipped video segment for the given lecture.
+
+    Query params:
+      - start: start time in seconds (float)
+      - end: end time in seconds (float)
+    """
+    lecture_dir = DATA_DIR / lecture_id
+
+    if not lecture_dir.exists():
+        return jsonify({"error": "Lecture not found"}), 404
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    try:
+        start_f = float(start) if start is not None else 0.0
+    except Exception:
+        return jsonify({"error": "Invalid start parameter"}), 400
+
+    try:
+        end_f = float(end) if end is not None else None
+    except Exception:
+        return jsonify({"error": "Invalid end parameter"}), 400
+
+    # Find video file
+    video_files = list(lecture_dir.glob("*.mp4")) + list(lecture_dir.glob("*.avi")) + \
+                 list(lecture_dir.glob("*.mov")) + list(lecture_dir.glob("*.mkv")) + \
+                 list(lecture_dir.glob("*.webm"))
+
+    if not video_files:
+        return jsonify({"error": "Video not found"}), 404
+
+    input_video = video_files[0]
+
+    clips_dir = lecture_dir / "clips"
+    clips_dir.mkdir(exist_ok=True)
+
+    # Generate a unique filename for the clip (used for on-disk storage)
+    clip_filename = f"{lecture_id}_clip_{uuid.uuid4().hex}.mp4"
+    output_path = clips_dir / clip_filename
+
+    # Build ffmpeg command. Use -ss and -to for segment; use re-encode for safety.
+    # If end is provided, use -to; otherwise use duration of video (ffmpeg handles)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-ss",
+        str(start_f),
+        "-i",
+        str(input_video),
+    ]
+
+    if end_f is not None:
+        # compute duration for -t as end - start
+        duration = max(0.0, end_f - start_f)
+        cmd += ["-t", str(duration)]
+
+    # Re-encode to ensure compatibility and frame accuracy
+    cmd += ["-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-movflags", "+faststart", str(output_path)]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            error_msg = f"ffmpeg failed (exit code {result.returncode}): {result.stderr}"
+            print(error_msg)
+            return jsonify({"error": "Failed to create clip", "details": result.stderr}), 500
+    except FileNotFoundError:
+        return jsonify({"error": "ffmpeg not found on server"}), 500
+    except Exception as e:
+        return jsonify({"error": "Failed to create clip", "details": str(e)}), 500
+
+    # Allow client to suggest a filename for the download (e.g., chapter title)
+    filename_param = request.args.get('filename')
+    download_name = clip_filename
+    if filename_param:
+        try:
+            # sanitize filename to be safe for filesystem/headers
+            safe = secure_filename(filename_param)
+            if not safe:
+                safe = clip_filename
+            # ensure extension
+            if not safe.lower().endswith('.mp4'):
+                safe = f"{safe}.mp4"
+            download_name = safe
+        except Exception:
+            download_name = clip_filename
+
+    # Return the clip file as attachment. Do not delete immediately so client can download.
+    # Some Flask/Werkzeug versions don't respect `download_name`, so set header explicitly
+    from urllib.parse import quote
+
+    resp = send_file(output_path, as_attachment=True)
+    try:
+        # RFC 5987 encoding for UTF-8 filenames
+        header = f"attachment; filename*=UTF-8''{quote(download_name)}; filename=\"{secure_filename(download_name)}\""
+        resp.headers["Content-Disposition"] = header
+    except Exception:
+        # Fallback: leave whatever send_file set
+        pass
+
+    return resp
 
 
 @app.route('/', defaults={'path': ''})
