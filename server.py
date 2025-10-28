@@ -92,12 +92,30 @@ def transcribe_video(video_path: Path, lecture_dir: Path) -> Dict:
         error_msg += f"STDERR: {result.stderr}"
         print(error_msg)
         raise Exception(error_msg)
-    
+    # Try to extract ASR settings from worker stdout for visibility
+    asr_settings = None
+    try:
+        for line in result.stdout.splitlines():
+            if line.startswith("Resolved ASR settings ->"):
+                # format: Resolved ASR settings -> model=..., device=..., compute_type=...
+                parts = line.split("->", 1)[1].strip()
+                kv = [p.strip() for p in parts.split(",")]
+                asr_settings = {}
+                for item in kv:
+                    if "=" in item:
+                        k, v = item.split("=", 1)
+                        asr_settings[k.strip()] = v.strip()
+                break
+    except Exception:
+        asr_settings = None
+
     return {
         "message": "Transcription completed",
         "segments": str(lecture_dir / "segments.json"),
         "srt": str(lecture_dir / "lecture.srt"),
-        "chapters_raw": str(lecture_dir / "chapters_raw.json")
+        "chapters_raw": str(lecture_dir / "chapters_raw.json"),
+        "asr_settings": asr_settings,
+        "worker_stdout": result.stdout if asr_settings is None else None
     }
 
 

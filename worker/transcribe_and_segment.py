@@ -67,10 +67,17 @@ def extract_audio(video_path: str, output_audio_path: str) -> None:
         sys.exit(1)
 
 
-def transcribe_audio(audio_path: str) -> List[Dict]:
-    """Transcribe audio using faster-whisper and return timestamped segments."""
-    print(f"Loading Whisper model ({WHISPER_MODEL_SIZE}) on {DEVICE}...")
-    model = WhisperModel(WHISPER_MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
+def transcribe_audio(audio_path: str, model_size: str = None, device: str = None, compute_type: str = None) -> List[Dict]:
+    """Transcribe audio using faster-whisper and return timestamped segments.
+
+    model_size/device/compute_type override module-level defaults when provided.
+    """
+    model_size = model_size or WHISPER_MODEL_SIZE
+    device = device or DEVICE
+    compute_type = compute_type or COMPUTE_TYPE
+
+    print(f"Loading Whisper model ({model_size}) on {device} (compute_type={compute_type})...")
+    model = WhisperModel(model_size, device=device, compute_type=compute_type)
     
     print(f"Transcribing {audio_path}...")
     segments, info = model.transcribe(
@@ -278,6 +285,23 @@ def main():
         default=SIMILARITY_THRESHOLD,
         help=f"Similarity threshold for boundaries (default: {SIMILARITY_THRESHOLD})"
     )
+    parser.add_argument(
+        "--device",
+        choices=["cpu", "cuda"],
+        default=None,
+        help="Device to run Whisper on (cpu or cuda). If not set, auto-detects CUDA if available."
+    )
+    parser.add_argument(
+        "--compute-type",
+        choices=["int8", "float16", "float32"],
+        default=None,
+        help="Compute type for faster-whisper (float16 recommended on CUDA)."
+    )
+    parser.add_argument(
+        "--model-size",
+        default=WHISPER_MODEL_SIZE,
+        help=f"Whisper model size to use (default: {WHISPER_MODEL_SIZE})"
+    )
     
     args = parser.parse_args()
     
@@ -309,13 +333,39 @@ def main():
     
     # Step 2: Transcribe
     if not segments_path.exists():
-        segments = transcribe_audio(str(audio_path))
-        
+        # Resolve device / compute type / model size from CLI or auto-detection
+        resolved_device = args.device
+        resolved_compute = args.compute_type
+        resolved_model = args.model_size
+
+        # Auto-detect CUDA if device not provided
+        if resolved_device is None:
+            try:
+                import torch
+                has_cuda = torch.cuda.is_available()
+            except Exception:
+                has_cuda = False
+
+            resolved_device = "cuda" if has_cuda else "cpu"
+
+        # Default compute types: prefer float16 on CUDA, int8 on CPU
+        if resolved_compute is None:
+            resolved_compute = "float16" if resolved_device == "cuda" else "int8"
+
+        print(f"Resolved ASR settings -> model={resolved_model}, device={resolved_device}, compute_type={resolved_compute}")
+
+        segments = transcribe_audio(
+            str(audio_path),
+            model_size=resolved_model,
+            device=resolved_device,
+            compute_type=resolved_compute
+        )
+
         # Save segments
         with open(segments_path, 'w', encoding='utf-8') as f:
             json.dump(segments, f, indent=2, ensure_ascii=False)
         print(f"[OK] Segments saved to {segments_path}")
-        
+
         # Create SRT
         segments_to_srt(segments, str(srt_path))
     else:

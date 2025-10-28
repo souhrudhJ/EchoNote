@@ -215,7 +215,26 @@ function App() {
         if (response.data.status === 'completed') {
           clearInterval(interval);
           setProcessing({ ...processing, [type]: false });
-          toast.success(`${type === 'transcribe' ? 'Transcription' : 'Summarization'} completed!`);
+          // Compute duration if available
+          const createdAt = response.data.created_at;
+          const completedAt = response.data.completed_at;
+          let durationMsg = '';
+          if (createdAt && completedAt) {
+            try {
+              const start = new Date(createdAt).getTime();
+              const end = new Date(completedAt).getTime();
+              const sec = Math.max(0, Math.round((end - start) / 1000));
+              durationMsg = ` (took ${sec}s)`;
+            } catch (e) {
+              durationMsg = '';
+            }
+          }
+
+          // Include ASR settings if present
+          const asr = response.data.result?.asr_settings;
+          const asrMsg = asr ? ` [ASR: model=${asr.model || ''}, device=${asr.device || ''}, compute=${asr.compute_type || ''}]` : '';
+
+          toast.success(`${type === 'transcribe' ? 'Transcription' : 'Summarization'} completed!${durationMsg}${asrMsg}`);
           
           // Reload lecture data
           if (selectedLecture) {
