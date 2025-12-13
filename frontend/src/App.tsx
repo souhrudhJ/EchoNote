@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { GraduationCap, Download, Sparkles, Moon, Sun, Search } from 'lucide-react';
+import { GraduationCap, Download, Moon, Sun, Search } from 'lucide-react';
 import { UploadZone } from './components/UploadZone';
 import { LandingPage } from './components/LandingPage';
 import { LectureCard } from './components/LectureCard';
@@ -10,6 +10,7 @@ import { EmptyState } from './components/EmptyState';
 import { LectureCardSkeleton, ChapterCardSkeleton } from './components/LoadingSkeleton';
 import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
+import { ModelSelectDropdown } from './components/ModelSelectDropdown';
 import { Input } from './components/ui/input';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
@@ -168,17 +169,18 @@ function App() {
     }
   };
 
-  const startTranscription = async () => {
+  const startTranscription = async (model: string = 'base') => {
     if (!selectedLecture) return;
 
     try {
       setProcessing({ ...processing, transcribe: true });
       const response = await axios.post('/api/transcribe', {
-        lecture_id: (selectedLecture as any).lecture_id
+        lecture_id: (selectedLecture as any).lecture_id,
+        model: model
       });
 
       const taskId = response.data.task_id;
-      toast.info('Transcription started...');
+      toast.info(`Transcription started using ${model} model...`);
       pollTaskStatus(taskId, 'transcribe');
     } catch (error: any) {
       console.error('Transcription error:', error);
@@ -286,6 +288,20 @@ function App() {
 
     return matchesSearch && matchesImportance;
   });
+
+  // Detect if any transcription task for the selected lecture has completed transcription
+  // but is still running segmentation. We update this using the polled taskStatus entries.
+  const segmentationInProgress = Boolean(Object.values(taskStatus).some((t: any) => {
+    try {
+      return (
+        t?.type === 'transcription' &&
+        t?.lecture_id === (selectedLecture as any)?.lecture_id &&
+        (t.transcription_completed === true || t.segmentation_in_progress === true || (t.result_partial != null))
+      );
+    } catch (e) {
+      return false;
+    }
+  }));
 
   return (
     <div className="min-h-screen gradient-bg transition-all duration-500">
@@ -402,42 +418,39 @@ function App() {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       {!(selectedLecture as any).has_segments && (
-                        <Button
-                          onClick={startTranscription}
-                          disabled={processing.transcribe}
-                          className="gap-2 gradient-primary hover:opacity-90"
-                        >
-                          {processing.transcribe ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              Transcribing...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4" />
-                              Transcribe
-                            </>
-                          )}
-                        </Button>
+                        <ModelSelectDropdown
+                          onModelSelect={startTranscription}
+                          isProcessing={processing.transcribe}
+                        />
                       )}
-                      {(selectedLecture as any).has_chapters_raw && !(selectedLecture as any).has_chapters && (
-                        <Button
-                          onClick={startSummarization}
-                          disabled={processing.summarize}
-                          className="gap-2 gradient-primary hover:opacity-90"
-                        >
-                          {processing.summarize ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              Summarizing...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4" />
-                              Generate Summaries
-                            </>
+                      {((selectedLecture as any).has_chapters_raw || (selectedLecture as any).has_segments) && !(selectedLecture as any).has_chapters && (
+                        <>
+                          <Button
+                            onClick={startSummarization}
+                            disabled={processing.summarize}
+                            className="gap-2 gradient-primary hover:opacity-90"
+                          >
+                            {processing.summarize ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                Summarizing...
+                              </>
+                            ) : (
+                              <>
+                                <span className="i-lucide-sparkles w-4 h-4" />
+                                Generate Summaries
+                              </>
+                            )}
+                          </Button>
+
+                          {/* Segmentation in-progress indicator (appears when transcription finished but segmentation still running) */}
+                          {segmentationInProgress && (
+                            <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                              <div className="w-3 h-3 rounded-full bg-yellow-400 animate-pulse" />
+                              <span className="text-sm text-muted-foreground">Segmentation in progress</span>
+                            </div>
                           )}
-                        </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -514,35 +527,65 @@ function App() {
                 )}
 
                 {/* Downloads */}
-                {(selectedLecture as any).has_chapters && (
+                {((selectedLecture as any).has_chapters || (selectedLecture as any).has_chapters_raw || (selectedLecture as any).has_segments) && (
                   <Card className="p-6 shadow-xl bg-gradient-to-br from-white to-primary/5 dark:from-gray-800 dark:to-gray-900 border-2 border-primary/20 dark:border-primary/40 transition-all duration-500">
                     <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-primary">
                       <Download className="w-5 h-5" />
                       Downloads
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        asChild
-                      >
-                        <a
-                          href={`/api/lectures/${(selectedLecture as any).lecture_id}/download/chapters`}
-                          download
+                      {(selectedLecture as any).has_chapters && (
+                        <Button
+                          variant="outline"
+                          asChild
                         >
-                          Download Chapters JSON
-                        </a>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        asChild
-                      >
-                        <a
-                          href={`/api/lectures/${(selectedLecture as any).lecture_id}/download/srt`}
-                          download
+                          <a
+                            href={`/api/lectures/${(selectedLecture as any).lecture_id}/download/chapters`}
+                            download
+                          >
+                            Download Chapters JSON
+                          </a>
+                        </Button>
+                      )}
+                      {(selectedLecture as any).has_chapters_raw && (
+                        <Button
+                          variant="outline"
+                          asChild
                         >
-                          Download Subtitles (SRT)
-                        </a>
-                      </Button>
+                          <a
+                            href={`/api/lectures/${(selectedLecture as any).lecture_id}/download/chapters_raw`}
+                            download
+                          >
+                            Download Raw Chapters
+                          </a>
+                        </Button>
+                      )}
+                      {(selectedLecture as any).has_segments && (
+                        <>
+                          <Button
+                            variant="outline"
+                            asChild
+                          >
+                            <a
+                              href={`/api/lectures/${(selectedLecture as any).lecture_id}/download/segments`}
+                              download
+                            >
+                              Download Segments JSON
+                            </a>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            asChild
+                          >
+                            <a
+                              href={`/api/lectures/${(selectedLecture as any).lecture_id}/download/srt`}
+                              download
+                            >
+                              Download Subtitles (SRT)
+                            </a>
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </Card>
                 )}
