@@ -75,6 +75,11 @@ def transcribe_video(video_path: Path, lecture_dir: Path) -> Dict:
         str(video_path),
         "--output-dir", str(DATA_DIR)
     ]
+
+    # Optional override for batched ASR via environment variable.
+    asr_batch_size = os.getenv("ASR_BATCH_SIZE")
+    if asr_batch_size:
+        cmd.extend(["--batch-size", asr_batch_size])
     
     print(f"Running transcription: {' '.join(cmd)}")
     

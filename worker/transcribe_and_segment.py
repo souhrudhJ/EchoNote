@@ -67,25 +67,53 @@ def extract_audio(video_path: str, output_audio_path: str) -> None:
         sys.exit(1)
 
 
-def transcribe_audio(audio_path: str, model_size: str = None, device: str = None, compute_type: str = None) -> List[Dict]:
+def transcribe_audio(
+    audio_path: str,
+    model_size: str = None,
+    device: str = None,
+    compute_type: str = None,
+    batch_size: int = 1
+) -> List[Dict]:
     """Transcribe audio using faster-whisper and return timestamped segments.
 
     model_size/device/compute_type override module-level defaults when provided.
+    If batch_size > 1, try batched inference for better GPU utilization.
     """
     model_size = model_size or WHISPER_MODEL_SIZE
     device = device or DEVICE
     compute_type = compute_type or COMPUTE_TYPE
+    batch_size = max(1, int(batch_size))
 
     print(f"Loading Whisper model ({model_size}) on {device} (compute_type={compute_type})...")
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
     
     print(f"Transcribing {audio_path}...")
-    segments, info = model.transcribe(
-        audio_path,
-        beam_size=5,
-        language="en",  # Change to None for auto-detection
-        word_timestamps=True
-    )
+    segments = None
+    info = None
+
+    # Try batched inference when requested. This improves throughput on CUDA in many cases.
+    if batch_size > 1:
+        try:
+            from faster_whisper import BatchedInferencePipeline
+            batched_model = BatchedInferencePipeline(model=model)
+            print(f"Using batched transcription (batch_size={batch_size})")
+            segments, info = batched_model.transcribe(
+                audio_path,
+                batch_size=batch_size,
+                beam_size=5,
+                language="en",  # Change to None for auto-detection
+                word_timestamps=True
+            )
+        except Exception as e:
+            print(f"Warning: batched transcription unavailable or failed ({e}). Falling back to standard transcription.")
+
+    if segments is None or info is None:
+        segments, info = model.transcribe(
+            audio_path,
+            beam_size=5,
+            language="en",  # Change to None for auto-detection
+            word_timestamps=True
+        )
     
     print(f"Detected language: {info.language} (probability: {info.language_probability:.2f})")
     
@@ -302,6 +330,12 @@ def main():
         default=WHISPER_MODEL_SIZE,
         help=f"Whisper model size to use (default: {WHISPER_MODEL_SIZE})"
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Batch size for faster-whisper batched inference. Defaults to 8 on CUDA and 1 on CPU."
+    )
     
     args = parser.parse_args()
     
@@ -337,6 +371,7 @@ def main():
         resolved_device = args.device
         resolved_compute = args.compute_type
         resolved_model = args.model_size
+        resolved_batch = args.batch_size
 
         # Auto-detect CUDA if device not provided
         if resolved_device is None:
@@ -352,13 +387,24 @@ def main():
         if resolved_compute is None:
             resolved_compute = "float16" if resolved_device == "cuda" else "int8"
 
-        print(f"Resolved ASR settings -> model={resolved_model}, device={resolved_device}, compute_type={resolved_compute}")
+        # Default batching: enable on CUDA for better throughput, keep CPU conservative.
+        if resolved_batch is None:
+            resolved_batch = 8 if resolved_device == "cuda" else 1
+
+        if resolved_batch < 1:
+            resolved_batch = 1
+
+        print(
+            f"Resolved ASR settings -> model={resolved_model}, device={resolved_device}, "
+            f"compute_type={resolved_compute}, batch_size={resolved_batch}"
+        )
 
         segments = transcribe_audio(
             str(audio_path),
             model_size=resolved_model,
             device=resolved_device,
-            compute_type=resolved_compute
+            compute_type=resolved_compute,
+            batch_size=resolved_batch
         )
 
         # Save segments
